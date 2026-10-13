@@ -15,6 +15,9 @@ LOG_PATH = HOME / "Library/Application Support/CodexTrafficLight/desktop-watcher
 LIGHT = HOME / ".codex/bin/codex-light"
 POLL_SECONDS = 0.5
 STALE_FILE_SECONDS = 7 * 24 * 60 * 60
+MAX_EVENT_LINE_BYTES = 1024 * 1024
+MAX_READ_BYTES_PER_POLL = 1024 * 1024
+MAX_EVENTS_PER_POLL = 1000
 TERMINAL_EVENTS = {"task_started", "task_complete", "turn_aborted"}
 THREAD_ID = re.compile(r"([0-9a-f]{8}-[0-9a-f-]{27,})\.jsonl$")
 
@@ -47,6 +50,8 @@ def set_state(state: str) -> None:
 
 
 def event_from_line(line: bytes):
+    if len(line) > MAX_EVENT_LINE_BYTES:
+        return None
     if not any(name.encode() in line for name in TERMINAL_EVENTS):
         return None
     try:
@@ -66,32 +71,68 @@ def latest_event(path: Path, size: int):
     with path.open("rb") as handle:
         end = size
         remainder = b""
+        discarding_oversized_line = False
         while end:
             start = max(0, end - 65536)
             handle.seek(start)
-            parts = (handle.read(end - start) + remainder).split(b"\n")
-            remainder = parts.pop(0)
-            for line in reversed(parts):
+            parts = handle.read(end - start).split(b"\n")
+            if len(parts) == 1:
+                if not discarding_oversized_line:
+                    remainder = parts[0] + remainder
+                    if len(remainder) > MAX_EVENT_LINE_BYTES:
+                        remainder = b""
+                        discarding_oversized_line = True
+                end = start
+                continue
+
+            if not discarding_oversized_line:
+                event = event_from_line(parts[-1] + remainder)
+                if event:
+                    return event
+            for line in reversed(parts[1:-1]):
                 event = event_from_line(line)
                 if event:
                     return event
+            remainder = parts[0]
+            discarding_oversized_line = False
             end = start
-        return event_from_line(remainder)
+        return None if discarding_oversized_line else event_from_line(remainder)
 
 
-def new_events(path: Path, offset: int):
+def new_events(path: Path, offset: int, discarding_oversized_line: bool = False):
     events = []
     with path.open("rb") as handle:
         handle.seek(offset)
-        data = handle.read()
-    last_newline = data.rfind(b"\n")
-    if last_newline < 0:
-        return offset, events
-    for line in data[:last_newline].split(b"\n"):
+        data = handle.read(MAX_READ_BYTES_PER_POLL)
+
+    if discarding_oversized_line:
+        newline = data.find(b"\n")
+        if newline < 0:
+            return offset + len(data), events, True
+        offset += newline + 1
+        data = data[newline + 1 :]
+        discarding_oversized_line = False
+
+    consumed = 0
+    line_count = 0
+    while line_count < MAX_EVENTS_PER_POLL:
+        newline = data.find(b"\n", consumed)
+        if newline < 0:
+            break
+        line = data[consumed:newline]
         event = event_from_line(line)
         if event:
             events.append(event)
-    return offset + last_newline + 1, events
+        consumed = newline + 1
+        line_count += 1
+
+    if line_count == MAX_EVENTS_PER_POLL:
+        return offset + consumed, events, False
+
+    trailing = data[consumed:]
+    if len(trailing) >= MAX_EVENT_LINE_BYTES:
+        return offset + len(data), events, True
+    return offset + consumed, events, False
 
 
 def wants_reply(message: str) -> bool:
@@ -102,6 +143,7 @@ def wants_reply(message: str) -> bool:
 class Watcher:
     def __init__(self):
         self.offsets = {}
+        self.discarding_oversized_line = set()
         self.active = {}
 
     def files(self):
@@ -137,10 +179,17 @@ class Watcher:
                 old = self.offsets.get(path, 0)
                 if size < old:
                     old = 0
+                    self.discarding_oversized_line.discard(path)
                 if size == old:
                     continue
-                offset, events = new_events(path, old)
+                offset, events, discarding = new_events(
+                    path, old, path in self.discarding_oversized_line
+                )
                 self.offsets[path] = offset
+                if discarding:
+                    self.discarding_oversized_line.add(path)
+                else:
+                    self.discarding_oversized_line.discard(path)
                 pending.extend((stamp, match.group(1), payload) for stamp, payload in events)
             except OSError as error:
                 log(f"read failed: {path.name}: {error}")

@@ -23,17 +23,52 @@ fi
 cp ./CodexTrafficLight "$SUPPORT_DIR/CodexTrafficLight"
 chmod +x "$SUPPORT_DIR/CodexTrafficLight"
 
-sed \
-  -e "s#__APP_DIR__#$APP_DIR#g" \
-  -e "s#__SUPPORT_DIR__#$SUPPORT_DIR#g" \
-  "$PLIST_NAME.template" > "$DEST"
+python3 - "$PLIST_NAME.template" "$DEST" "$APP_DIR" "$SUPPORT_DIR" <<'PY'
+import plistlib
+import sys
+
+template, destination, app_dir, support_dir = sys.argv[1:]
+
+def replace(value):
+    if isinstance(value, str):
+        return value.replace("__APP_DIR__", app_dir).replace("__SUPPORT_DIR__", support_dir)
+    if isinstance(value, list):
+        return [replace(item) for item in value]
+    if isinstance(value, dict):
+        return {key: replace(item) for key, item in value.items()}
+    return value
+
+with open(template, "rb") as source:
+    plist = replace(plistlib.load(source))
+with open(destination, "wb") as output:
+    plistlib.dump(plist, output, fmt=plistlib.FMT_XML, sort_keys=False)
+PY
 chmod 644 "$DEST"
 
-sed \
-  -e "s#__APP_DIR__#$APP_DIR#g" \
-  -e "s#__SUPPORT_DIR__#$SUPPORT_DIR#g" \
-  -e "s#__PYTHON_PATH__#$PYTHON_PATH#g" \
-  "com.ss.codex-traffic-light-watcher.plist.template" > "$WATCHER_DEST"
+python3 - "com.ss.codex-traffic-light-watcher.plist.template" "$WATCHER_DEST" "$APP_DIR" "$SUPPORT_DIR" "$PYTHON_PATH" <<'PY'
+import plistlib
+import sys
+
+template, destination, app_dir, support_dir, python_path = sys.argv[1:]
+
+def replace(value):
+    if isinstance(value, str):
+        return (
+            value.replace("__APP_DIR__", app_dir)
+            .replace("__SUPPORT_DIR__", support_dir)
+            .replace("__PYTHON_PATH__", python_path)
+        )
+    if isinstance(value, list):
+        return [replace(item) for item in value]
+    if isinstance(value, dict):
+        return {key: replace(item) for key, item in value.items()}
+    return value
+
+with open(template, "rb") as source:
+    plist = replace(plistlib.load(source))
+with open(destination, "wb") as output:
+    plistlib.dump(plist, output, fmt=plistlib.FMT_XML, sort_keys=False)
+PY
 chmod 644 "$WATCHER_DEST"
 
 launchctl bootout "gui/$UID_VALUE/$LABEL" >/dev/null 2>&1 || true

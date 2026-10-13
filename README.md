@@ -43,6 +43,13 @@ A tiny floating macOS traffic light for Codex status:
 - 可播放 `~/.codex/traffic-light-sounds/done.mp3` 前 10 秒；未安装自定义音频时使用系统提示音。
 - `./build.command` 会生成可双击的 `CodexTaskTrafficLight.app` 和 ZIP 包。
 
+## 隐私与安全
+
+- watcher 在本机读取 `~/.codex/sessions/**/rollout-*.jsonl`。这些文件可能包含完整聊天内容；程序只在内存中解析状态事件及少量字段，不会把会话正文写入红绿灯日志或通过网络发送。文件名含“保密”的 rollout 会跳过。
+- 应用不需要管理员权限；开机启动使用当前 macOS 用户的 LaunchAgent。
+- 当前仅公开源码。旧版 `v1.0.0` 安装包已设为草稿，暂不提供公开下载；完成开发者签名和 Apple 公证后再发布安装包。
+- 自行构建的 app 没有 Developer ID 签名或 Apple 公证，macOS 可能显示安全警告。安装前请检查源码和脚本。
+
 ## 提示声
 
 - 红灯：无提示声，只亮灯。
@@ -73,7 +80,7 @@ cd codex-task-traffic-light
 
 The autostart installer starts both the desktop light and the Codex session watcher. The generated app can also be opened directly for manual status control.
 
-The build also creates `dist/CodexTaskTrafficLight-macOS.zip` for sharing.
+The build also creates `dist/CodexTaskTrafficLight-macOS.zip` for local testing. No public prebuilt app is currently available.
 
 Then make sure `~/.codex/bin` is in your shell path:
 
@@ -160,7 +167,7 @@ codex-light-run python3 your_script.py
 
 ## Codex 自动状态
 
-桌面 watcher 读取 `~/.codex/sessions` 中的 `task_started`、`task_complete` 和 `turn_aborted`。同一轮的开始与结束 ID 匹配且没有其他正在执行的任务时，才亮绿灯并响音乐；长时间思考或工具无输出时保持红灯。中断不会响完成音。超过 7 天未更新的遗留未闭合会话不会占用当前状态。
+桌面 watcher 读取 `~/.codex/sessions` 中的 `task_started`、`task_complete` 和 `turn_aborted`。同一轮的开始与结束 ID 匹配且没有其他正在执行的任务时，才亮绿灯并响音乐；长时间思考或工具无输出时保持红灯。中断不会响完成音。启动时超过 7 天未更新的遗留未闭合会话不会占用当前状态。单条事件最大处理 1 MiB，每次轮询最多读取 1 MiB、处理 1000 条事件，超长记录会跳过。
 
 Codex hooks 可接到：
 

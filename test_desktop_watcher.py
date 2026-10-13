@@ -145,6 +145,54 @@ class DesktopWatcherTest(unittest.TestCase):
         watcher.poll()
         self.assertEqual(self.transitions, ["working", "idle"])
 
+    def test_oversized_event_line_is_skipped_and_following_events_work(self):
+        p = self.file("11111111-1111-1111-1111-111111111111")
+        watcher = watcher_module.Watcher()
+        oversized = b"x" * (watcher_module.MAX_EVENT_LINE_BYTES + 1)
+        p.write_bytes(oversized)
+        watcher.offsets[p] = 0
+        watcher.poll()
+        self.assertEqual(watcher.offsets[p], watcher_module.MAX_READ_BYTES_PER_POLL)
+        self.assertIn(p, watcher.discarding_oversized_line)
+
+        with p.open("ab") as handle:
+            handle.write(b"still part of oversized line\n")
+            handle.write(event("task_started", "turn-a", "2026-09-30T10:00:00Z"))
+        watcher.poll()
+        self.assertEqual(self.transitions, ["working"])
+
+    def test_poll_read_and_event_counts_are_bounded(self):
+        p = self.file("11111111-1111-1111-1111-111111111111")
+        watcher = watcher_module.Watcher()
+        p.write_bytes(event("task_started", "turn-a", "2026-09-30T10:00:00Z") * 2000)
+        watcher.offsets[p] = 0
+        watcher.poll()
+        self.assertLessEqual(watcher.offsets[p], watcher_module.MAX_READ_BYTES_PER_POLL)
+        self.assertEqual(self.transitions, ["working"])
+
+    def test_start_skips_oversized_tail_and_finds_prior_task(self):
+        p = self.file("11111111-1111-1111-1111-111111111111")
+        p.write_bytes(
+            event("task_started", "turn-a", "2026-09-30T10:00:00Z")
+            + b"x" * (watcher_module.MAX_EVENT_LINE_BYTES + 1)
+            + b"\n"
+        )
+        watcher = watcher_module.Watcher()
+        watcher.start()
+        self.assertEqual(self.transitions, ["working"])
+
+    def test_truncated_file_resets_oversized_line_discard(self):
+        p = self.file("11111111-1111-1111-1111-111111111111")
+        p.write_bytes(b"x" * (watcher_module.MAX_EVENT_LINE_BYTES + 1))
+        watcher = watcher_module.Watcher()
+        watcher.offsets[p] = 0
+        watcher.poll()
+        self.assertIn(p, watcher.discarding_oversized_line)
+
+        p.write_bytes(event("task_started", "turn-a", "2026-09-30T10:00:00Z"))
+        watcher.poll()
+        self.assertEqual(self.transitions, ["working"])
+
 
 if __name__ == "__main__":
     unittest.main()
