@@ -20,14 +20,6 @@ if [ "${CODEX_LIGHT_NOTIFY_SKIP_ORIGINAL:-0}" != "1" ] && [ -n "$ORIGINAL" ] && 
   "$ORIGINAL" "$@" >/dev/null 2>&1 || true
 fi
 
-case "$EVENT" in
-  turn-start)
-    "$LIGHT" working >/dev/null 2>&1 || true
-    ;;
-  turn-ended)
-    current="$("$LIGHT" status 2>/dev/null || echo idle)"
-    if [ "$current" = "working" ]; then
-      "$LIGHT" done >/dev/null 2>&1 || true
-    fi
-    ;;
-esac
+if [ "$EVENT" = "turn-start" ]; then
+  "$LIGHT" working >/dev/null 2>&1 || true
+fi

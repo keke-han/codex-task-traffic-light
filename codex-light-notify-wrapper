@@ -1,0 +1,8 @@
+#!/bin/zsh
+
+# Preserve the existing Codex notification. The session watcher owns completion.
+EXISTING_NOTIFY="$HOME/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient"
+
+if [ -x "$EXISTING_NOTIFY" ]; then
+  "$EXISTING_NOTIFY" "$@" >/dev/null 2>&1 || true
+fi

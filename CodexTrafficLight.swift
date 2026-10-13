@@ -6,6 +6,8 @@ let supportDir = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/Application Support/CodexTrafficLight")
 let stateFile = supportDir.appendingPathComponent("state.json")
 let preferencesFile = supportDir.appendingPathComponent("preferences.json")
+let customDoneSoundURL = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent(".codex/traffic-light-sounds/done.mp3")
 
 let labels: [String: String] = [
     "working": "正在干活",
@@ -31,7 +33,8 @@ let doneAutoIdleSeconds: TimeInterval = {
 
 final class SoundController {
     private let sounds: [String: NSSound?] = [
-        "done": NSSound(named: NSSound.Name("Glass")),
+        "done": NSSound(contentsOf: customDoneSoundURL, byReference: true)
+            ?? NSSound(named: NSSound.Name("Glass")),
         "waiting": NSSound(named: NSSound.Name("Basso"))
     ]
     private var redTimer: Timer?
@@ -55,7 +58,7 @@ final class SoundController {
         stopRedLoop()
         if playPrompt {
             if state == "done" {
-                playGreenForThreeSeconds()
+                playGreenForTenSeconds()
             } else {
                 playOnce(state)
             }
@@ -81,7 +84,7 @@ final class SoundController {
         sound.play()
     }
 
-    private func playGreenForThreeSeconds() {
+    private func playGreenForTenSeconds() {
         guard let sound = sounds["done"] ?? nil else { return }
         greenStopTimer?.invalidate()
         if sound.isPlaying {
@@ -90,7 +93,7 @@ final class SoundController {
         }
         sound.loops = true
         sound.play()
-        greenStopTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { [weak self] _ in
+        greenStopTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: false) { [weak self] _ in
             self?.stopGreenSound()
         }
     }
@@ -236,9 +239,9 @@ final class TrafficLightView: NSView {
 
     func activeLight() -> String {
         switch state {
-        case "working": return "yellow"
+        case "working": return "red"
         case "done": return "green"
-        case "waiting": return "red"
+        case "waiting": return "yellow"
         default: return ""
         }
     }

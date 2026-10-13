@@ -1,8 +1,11 @@
 .DS_Store
 CodexTrafficLight
+CodexTrafficLight.app/
+CodexTaskTrafficLight.app/
+dist/
+__pycache__/
 runtime/
 *.log
 state.json
 preferences.json
 hook.log
-
