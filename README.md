@@ -2,6 +2,10 @@
 
 Codex 任务红绿灯 / Codex Task Traffic Light
 
+> **平台支持：目前仅支持 macOS（Mac），不支持 Windows 或 Linux。**
+>
+> **Platform support: macOS only. Windows and Linux are not supported.**
+
 This is an independently maintained derivative of [st44464322/codex-honglvdeng-traffic-light](https://github.com/st44464322/codex-honglvdeng-traffic-light), distributed under its MIT license. This version adds turn-aware completion tracking and a packaged macOS app.
 
 这是一个 macOS 桌面悬浮小工具，用来显示 Codex 当前状态。
